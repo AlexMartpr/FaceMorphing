@@ -22,4 +22,4 @@ if __name__ == '__main__':
     args = vars(parser_arg.parse_args())
 
     images = read_images(args["img1"], args["img2"])
-    util.generate_face_corresponding_points(images)
+    util.get_face_points(images)
