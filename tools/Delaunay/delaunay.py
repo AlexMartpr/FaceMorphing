@@ -1,7 +1,7 @@
 import math
 
-err = math.exp(-5)
-
+err = 1 / 10**9
+# err = 0
 
 class Vector:
     def __init__(self, x, y):
@@ -10,7 +10,15 @@ class Vector:
 
     @staticmethod
     def cross_product_2d(vec1, vec2):
-        return vec1.x * vec2.y - vec2.y * vec2.x
+        return vec1.x * vec2.y - vec1.y * vec2.x
+
+    def __str__(self):
+        return f"x : {self.x}  y : {self.y}"
+
+    def __lt__(self, other):
+        if self.x == other.x:
+            return self.y < other.y
+        return self.x < other.x
 
     def __eq__(self, other):
         if not isinstance(other, Vector):
@@ -49,37 +57,38 @@ class Triangle:
 
 
 class Edge:
-    def __init__(self, fp=None, sp=None):
+    def __init__(self, fp=-1, sp=-1):
         # Indexes first and second point in array of points
         self.inx_fst_point = fp
         self.inx_snd_point = sp
 
     def __eq__(self, other):
-        if not isinstance(other, Edge):
-            raise TypeError("Second operand type doesnt match type Edge")
-        return self.inx_fst_point == other.inx_fst_point and self.inx_snd_point == other.inx_snd_point
+        return self.__class__ == other.__class__ and self.inx_fst_point == other.inx_fst_point and self.inx_snd_point == other.inx_snd_point
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __hash__(self):
         return hash((self.inx_fst_point, self.inx_snd_point))
 
 
 class PairVertexes:
-    def __init__(self, fv=None, sv=None):
+    def __init__(self, fv=-1, sv=-1):
         # Indexes first and second point in array of points
         self.first_v = fv
         self.second_v = sv
 
     def insert_vert(self, nv):
-        if self.first_v is None or self.second_v is None:
+        if self.first_v == nv or self.second_v == nv:
             return
-        if self.first_v is None:
+        if self.first_v == -1:
             self.first_v = nv
         else:
             self.second_v = nv
 
     def remove_vert(self, rv):
         if self.first_v == rv:
-            self.first_v = None
+            self.first_v = -1
         elif self.second_v == rv:
             self.second_v = rv
 
@@ -104,8 +113,10 @@ class DelaunayTriangulation:
         # Dictionary <Edge, PairVertexes>
         self.triangulations_graph = dict()
         # For detecting visual edges in minimum convex hull from point
-        self.minimum_convex_hull = dict()
+        self.minimum_convex_hull = dict().fromkeys((range(len(self.points))))
         self.recursion = dict()
+        for ix in range(len(self.points)):
+            self.minimum_convex_hull[ix] = {'left_vertex': -1, 'right_vertex': -1}
 
     def __init_first_triangle(self):
         # List vertexes in the left and right side from vertex
@@ -138,9 +149,9 @@ class DelaunayTriangulation:
             return True
 
         s_alpha = (top_vert.x - right_vert.x) * (top_vert.x - left_vert.x) + (top_vert.y - right_vert.y) * (
-                    top_vert.y - left_vert.y)
+                top_vert.y - left_vert.y)
         s_beta = (bottom_vert.x - right_vert.x) * (bottom_vert.x - left_vert.x) + (bottom_vert.y - right_vert.y) * (
-                    bottom_vert.y - left_vert.y)
+                bottom_vert.y - left_vert.y)
 
         if s_alpha > -err and s_beta > -err:
             return True
@@ -163,12 +174,24 @@ class DelaunayTriangulation:
         return False
 
     def __flip(self, left, right, out_v, min_vert_in_hull):
-        self.triangulations_graph[Edge(right, out_v)].replace_vertexes(left, min_vert_in_hull)
-        self.triangulations_graph[Edge(left, out_v)].replace_vertexes(right, min_vert_in_hull)
+        key = Edge(right, out_v)
+        if key not in self.triangulations_graph:
+            self.triangulations_graph[key] = PairVertexes()
+        self.triangulations_graph[key].replace_vertexes(left, min_vert_in_hull)
+        key = Edge(left, out_v)
+        if key not in self.triangulations_graph:
+            self.triangulations_graph[key] = PairVertexes()
+        self.triangulations_graph[key].replace_vertexes(right, min_vert_in_hull)
         _min, _max = min(min_vert_in_hull, left), max(min_vert_in_hull, left)
-        self.triangulations_graph[Edge(_min, _max)].replace_two_vertexes(right, out_v)
+        key = Edge(_min, _max)
+        if key not in self.triangulations_graph:
+            self.triangulations_graph[key] = PairVertexes()
+        self.triangulations_graph[key].replace_vertexes(right, out_v)
         _min, _max = min(min_vert_in_hull, right), max(min_vert_in_hull, right)
-        self.triangulations_graph[Edge(_min, _max)].replace_two_vertexes(left, out_v)
+        key = Edge(_min, _max)
+        if key not in self.triangulations_graph:
+            self.triangulations_graph[key] = PairVertexes()
+        self.triangulations_graph[key].replace_vertexes(left, out_v)
 
         _min, _max = min(left, right), max(left, right)
         try:
@@ -183,17 +206,30 @@ class DelaunayTriangulation:
         sz_stack = 1
 
         while sz_stack > 0:
+            # print(sz_stack)
             ix_prev = sz_stack - 1
             left, right = self.recursion[ix_prev].inx_fst_point, self.recursion[ix_prev].inx_snd_point
             sz_stack -= 1
             _min, _max = min(left, right), max(left, right)
-            min_vert_in_hull = self.triangulations_graph[Edge(_min, _max)].min_from_two_vert()
+            key = Edge(_min, _max)
+            if key not in self.triangulations_graph:
+                self.triangulations_graph[key] = PairVertexes()
+            min_vert_in_hull = self.triangulations_graph[key].min_from_two_vert()
             if self.__delaunay_cond(left, right, out_v, min_vert_in_hull):
-                self.triangulations_graph[Edge(right, out_v)].insert_vert(left)
-                self.triangulations_graph[Edge(left, out_v)].insert_vert(right)
+                key = Edge(right, out_v)
+                if key not in self.triangulations_graph:
+                    self.triangulations_graph[key] = PairVertexes()
+                self.triangulations_graph[key].insert_vert(left)
+                key = Edge(left, out_v)
+                if key not in self.triangulations_graph:
+                    self.triangulations_graph[key] = PairVertexes()
+                self.triangulations_graph[key].insert_vert(right)
                 if right < left:
                     right, left = left, right
-                self.triangulations_graph[Edge(left, right)].insert_vert(out_v)
+                key = Edge(left, right)
+                if key not in self.triangulations_graph:
+                    self.triangulations_graph[key] = PairVertexes()
+                self.triangulations_graph[key].insert_vert(out_v)
                 continue
 
             self.__flip(left, right, out_v, min_vert_in_hull)
@@ -202,7 +238,11 @@ class DelaunayTriangulation:
             sz_stack += 2
 
     def __to_right_direction(self, last_vec, next_vec, ix_point, prev_ix_mch, next_ix_mch):
-        while Vector.cross_product_2d(last_vec, next_vec) > -err:
+        while Vector.cross_product_2d(last_vec, next_vec) >= 0:
+            # print(str(last_vec))
+            # print(str(next_vec))
+            # exit(-1)
+            # print(Vector.cross_product_2d(last_vec, next_vec))
             self.__legalize_triangles(prev_ix_mch, next_ix_mch, ix_point)
             prev_ix_mch = next_ix_mch
             last_vec = next_vec
@@ -212,17 +252,20 @@ class DelaunayTriangulation:
         self.minimum_convex_hull[ix_point]['right_vertex'] = prev_ix_mch
 
     def __to_left_direction(self, last_vec, next_vec, ix_point, prev_ix_mch, next_ix_mch):
-        while Vector.cross_product_2d(last_vec, next_vec) < err:
+        while Vector.cross_product_2d(last_vec, next_vec) <= 0:
+            print(str(last_vec))
+            print(str(next_vec))
             self.__legalize_triangles(next_ix_mch, prev_ix_mch, ix_point)
             prev_ix_mch = next_ix_mch
             last_vec = next_vec
             next_ix_mch = self.minimum_convex_hull[prev_ix_mch]['left_vertex']
             next_vec = self.points[next_ix_mch] - self.points[ix_point]
 
-        self.minimum_convex_hull[ix_point]['right_vertex'] = prev_ix_mch
+        self.minimum_convex_hull[ix_point]['left_vertex'] = prev_ix_mch
 
     def do_triangulation(self):
-        sorted(self.points, key=lambda point: point.x)
+        self.points = sorted(self.points)
+        # print(self.points)
         self.__init_first_triangle()
 
         for i in range(2, len(self.points)):
@@ -230,8 +273,9 @@ class DelaunayTriangulation:
             next_ix_mch_vert = self.minimum_convex_hull[prev_ix_mch_vert]['right_vertex']
             last_vec = self.points[prev_ix_mch_vert] - self.points[i]
             next_vec = self.points[next_ix_mch_vert] - self.points[i]
+            print(i)
             self.__to_right_direction(last_vec, next_vec, i, prev_ix_mch_vert, next_ix_mch_vert)
-
+            print(i)
             prev_ix_mch_vert = i - 1
             next_ix_mch_vert = self.minimum_convex_hull[prev_ix_mch_vert]['left_vertex']
             last_vec = self.points[prev_ix_mch_vert] - self.points[i]

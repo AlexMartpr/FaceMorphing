@@ -1,9 +1,8 @@
-import cv2
 import dlib
 import numpy as np
-from errors.errors import NoFaceFoundError
+from tools.errors.errors import NoFaceFoundError
 
-PATH_DATASET = "src/tools/dataset/shape_predictor_68_face_landmarks.dat"
+PATH_DATASET = "tools/dataset/shape_predictor_68_face_landmarks.dat"
 
 
 def get_face_points(images):
@@ -16,8 +15,10 @@ def get_face_points(images):
 
     index_image = 0
     size = []
-    for img in images:
-        size = [img.shape[0], img.shape[0]]
+    img = images[0]
+    for w in range(0, 1):
+        # height and width
+        size = [img.shape[0], img.shape[1]]
         faces = detector(img, 1)
 
         # Return error if no faces were found
@@ -35,8 +36,8 @@ def get_face_points(images):
                 [x, y] = shape.part(i).x, shape.part(i).y
                 current_list.append((x, y))
                 # Fill coordinates of features of face
-                face_points[i][0] += x
-                face_points[i][1] += y
+                face_points[i][0] += float(x)
+                face_points[i][1] += float(y)
 
             current_list.append((1, 1))
             current_list.append((size[1] - 1, 1))
@@ -49,7 +50,8 @@ def get_face_points(images):
 
         index_image += 1
 
-    arr = face_points / 2
+    # arr = face_points / 2
+    arr = face_points
     arr = np.append(arr, [[1, 1]], axis=0)
     arr = np.append(arr, [[size[1] - 1, 1]], axis=0)
     arr = np.append(arr, [[(size[1] - 1) // 2, 1]], axis=0)
@@ -58,3 +60,5 @@ def get_face_points(images):
     arr = np.append(arr, [[(size[1] - 1) // 2, size[0] - 1]], axis=0)
     arr = np.append(arr, [[size[1] - 1, size[0] - 1]], axis=0)
     arr = np.append(arr, [[(size[1] - 1), (size[0] - 1) // 2]], axis=0)
+
+    return arr
